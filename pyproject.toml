@@ -1,0 +1,6 @@
+[project]
+name = "pl-system"
+version = "0.1.0"
+
+[tool.streamlit]
+pythonVersion = "3.11"
