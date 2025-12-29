@@ -519,7 +519,55 @@ A: The error message shows exactly which limit was exceeded and by how much.
 
 ---
 
-## 📄 License
+## � Deployment to Streamlit Cloud
+
+### Prerequisites
+- GitHub repository (already set up)
+- Streamlit Cloud account (free tier available)
+- MongoDB Atlas database (configured)
+
+### Step-by-Step Deployment
+
+1. **Fork/Clone this repository** to your GitHub account
+
+2. **Create Streamlit Cloud app**:
+   - Go to [share.streamlit.io](https://share.streamlit.io)
+   - Click "New app"
+   - Connect your GitHub account
+   - Select repository: `your-username/PL_System`
+   - Main file path: `app.py`
+   - Click "Deploy"
+
+3. **Configure Secrets** (CRITICAL - Do this immediately after deployment):
+   - In your Streamlit Cloud dashboard, go to your app
+   - Click the "⋮" menu → "Settings"
+   - Go to "Secrets" section
+   - Add your MongoDB configuration:
+     ```toml
+     MONGODB_URI = "mongodb+srv://your_username:your_password@your_cluster.mongodb.net/"
+     DATABASE_NAME = "pl_request_system"
+     ```
+   - **Replace with your actual MongoDB Atlas connection string**
+   - Click "Save"
+
+4. **Redeploy the app**:
+   - After adding secrets, click "Redeploy" in Streamlit Cloud
+   - The app will restart with database access
+
+### Security Notes
+- ✅ **Secrets are encrypted** and only accessible to your app
+- ✅ **Connection string is never exposed** in logs or code
+- ✅ **Database access is secure** through MongoDB Atlas authentication
+- ❌ **Never commit secrets** to GitHub (already configured in .gitignore)
+
+### Troubleshooting
+- **App won't start**: Check that secrets are properly configured
+- **Database connection fails**: Verify MongoDB Atlas IP whitelist and credentials
+- **App shows errors**: Check Streamlit Cloud logs for detailed error messages
+
+---
+
+## �📄 License
 
 Internal use only. Not for public distribution.
 
