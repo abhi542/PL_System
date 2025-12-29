@@ -43,8 +43,8 @@ venv.bak/
 .DS_Store
 
 # Streamlit
-.streamlit/
 .streamlit/secrets.toml
+!.streamlit/secrets.toml.example
 
 # Logs
 *.log

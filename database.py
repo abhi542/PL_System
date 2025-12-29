@@ -8,7 +8,7 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables (for local development)
 load_dotenv()
 
 class DatabaseConfig:
@@ -25,13 +25,21 @@ class DatabaseConfig:
     def _connect(self):
         """
         Establish connection to MongoDB Atlas
+        Supports both local .env files and Streamlit Cloud secrets
         """
         try:
-            mongodb_uri = os.getenv('MONGODB_URI')
-            database_name = os.getenv('DATABASE_NAME', 'pl_request_system')
+            # Try Streamlit secrets first (for deployment)
+            try:
+                import streamlit as st
+                mongodb_uri = st.secrets["MONGODB_URI"]
+                database_name = st.secrets.get("DATABASE_NAME", "pl_request_system")
+            except (ImportError, KeyError):
+                # Fall back to environment variables (for local development)
+                mongodb_uri = os.getenv('MONGODB_URI')
+                database_name = os.getenv('DATABASE_NAME', 'pl_request_system')
             
             if not mongodb_uri:
-                raise ValueError("MONGODB_URI not found in environment variables")
+                raise ValueError("MONGODB_URI not found in environment variables or Streamlit secrets")
             
             # Create MongoDB client with timeout
             self.client = MongoClient(
