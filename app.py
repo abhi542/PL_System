@@ -151,6 +151,10 @@ def page_login():
                         st.session_state.logged_in = True
                         st.session_state.emp_id = "ADMIN"
                         st.session_state.user_type = "admin"
+                        # Reset notifications flag
+                        if 'notifications_viewed' in st.session_state:
+                            del st.session_state['notifications_viewed']
+                            
                         st.success("Welcome, ADMIN! Please create your first user account.")
                         st.rerun()
                     else:
@@ -161,6 +165,10 @@ def page_login():
                             st.session_state.logged_in = True
                             st.session_state.emp_id = user['emp_id']
                             st.session_state.user_type = user['user_type']
+                            # Reset notifications flag to ensure they are seen on new login
+                            if 'notifications_viewed' in st.session_state:
+                                del st.session_state['notifications_viewed']
+                                
                             st.success(f"Welcome, {user['emp_id']}!")
                             st.rerun()
                         else:
@@ -641,6 +649,26 @@ def page_approve_requests():
                                         st.error(f"Validation Error: {str(e)}")
                                     except Exception as e:
                                         st.error(f"Error: {str(e)}")
+                        
+                        # Rejection Option
+                        st.markdown("---")
+                        with st.expander("❌ Reject Request", expanded=False):
+                            reason = st.text_area("Reason for Rejection", key=f"reason_{req['_id']}")
+                            if st.button("Confirm Reject", key=f"reject_{req['_id']}", type="primary"):
+                                if not reason:
+                                    st.error("Please provide a reason.")
+                                else:
+                                    try:
+                                        success = st.session_state.request_manager.reject_request(
+                                            request_id=str(req['_id']),
+                                            reason=reason,
+                                            rejected_by_emp_id=st.session_state.emp_id
+                                        )
+                                        if success:
+                                            st.error(f"❌ Request Rejected!")
+                                            st.rerun()
+                                    except Exception as e:
+                                        st.error(str(e))
                     
                     st.markdown("---")
         else:
@@ -901,6 +929,31 @@ def main():
     st.sidebar.markdown(f"**User:** {st.session_state.emp_id}")
     st.sidebar.markdown(f"**Type:** {st.session_state.user_type.upper()}")
     
+    # Notifications (Run once per session/login)
+    if 'notifications_viewed' not in st.session_state:
+        # Get recent activity
+        try:
+            recent_activity = st.session_state.request_manager.get_recent_user_activity(st.session_state.emp_id)
+            if recent_activity:
+                for act in recent_activity:
+                    # Only show if recently updated (e.g. within last 24h? or just last 5)
+                    # For now showing all recent
+                    status = act['status']
+                    pl = act['pl_no']
+                    if status == 'approved':
+                        st.toast(f"✅ Request for {pl} was APPROVED!", icon="✅")
+                    elif status == 'delivered':
+                        st.toast(f"🚚 Request for {pl} was DELIVERED!", icon="🚚")
+                    elif status == 'rejected':
+                        reason = act.get('rejection_reason', 'No reason provided')
+                        st.toast(f"❌ Request for {pl} was REJECTED. Reason: {reason}", icon="❌")
+            
+            st.session_state.notifications_viewed = True
+            
+        except Exception as e:
+            # print(f"Notification error: {e}")
+            pass
+
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
         st.session_state.user_type = None

@@ -638,6 +638,52 @@ class RequestManager:
         )
         
         return result.modified_count > 0
+
+    def reject_request(
+        self,
+        request_id: str,
+        reason: str,
+        rejected_by_emp_id: str
+    ) -> bool:
+        """
+        Reject a pending request with a reason
+        """
+        from bson.objectid import ObjectId
+        
+        # Get request
+        request = self.requests_collection.find_one({'_id': ObjectId(request_id)})
+        if not request:
+            raise ValidationError("Request not found")
+        
+        if request['status'] != 'pending':
+            raise ValidationError(f"Cannot reject request with status '{request['status']}'")
+            
+        if not reason or len(reason.strip()) == 0:
+            raise ValidationError("Rejection reason is required")
+            
+        result = self.requests_collection.update_one(
+            {'_id': ObjectId(request_id)},
+            {
+                '$set': {
+                    'status': 'rejected',
+                    'rejection_reason': reason.strip(),
+                    'rejected_by': rejected_by_emp_id,
+                    'rejected_at': get_ist_time(),
+                    'updated_at': get_ist_time()
+                }
+            }
+        )
+        
+        return result.modified_count > 0
+
+    def get_recent_user_activity(self, emp_id: str, limit: int = 5) -> List[Dict]:
+        """
+        Get recent approved/rejected Activity for a user to show as notifications
+        """
+        return list(self.requests_collection.find({
+            'requested_by_emp_id': emp_id,
+            'status': {'$in': ['approved', 'rejected', 'delivered']}
+        }).sort('updated_at', -1).limit(limit))
     
     def get_pl_summary(self, pl_no: str, as_of_date: datetime = None) -> Dict:
         """
