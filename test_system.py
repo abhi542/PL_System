@@ -56,16 +56,16 @@ def test_add_pl_number():
             product_name="Test Widget Type A",
             ear=1000,
             global_limit=1000,
-            section_limits={'A': 250, 'B': 250, 'C': 250, 'D': 250}
+            section_limits={'EMR': 250, 'EWFPS': 250, 'EMS': 250, 'EGS': 250}
         )
         
         print(f"✅ SUCCESS: Added PL Number {product['pl_no']}")
         print(f"   Product: {product['product_name']}")
         print(f"   EAR: {product['ear']}")
-        print(f"   Limits: A={product['section_limits']['A']}, "
-              f"B={product['section_limits']['B']}, "
-              f"C={product['section_limits']['C']}, "
-              f"D={product['section_limits']['D']}")
+        print(f"   Limits: EMR={product['section_limits']['EMR']}, "
+              f"EWFPS={product['section_limits']['EWFPS']}, "
+              f"EMS={product['section_limits']['EMS']}, "
+              f"EGS={product['section_limits']['EGS']}")
         return True
         
     except ValidationError as e:
@@ -89,7 +89,7 @@ def test_duplicate_pl_number():
             product_name="Duplicate Widget",
             ear=500,
             global_limit=500,
-            section_limits={'A': 125, 'B': 125, 'C': 125, 'D': 125}
+            section_limits={'EMR': 125, 'EWFPS': 125, 'EMS': 125, 'EGS': 125}
         )
         
         print("❌ FAILED: System allowed duplicate PL Number!")
@@ -117,7 +117,7 @@ def test_valid_request():
         # Submit valid request
         request = request_manager.create_request(
             pl_no="TEST-001",
-            requested_by="A",
+            requested_by="EMR",
             requested_count=50
         )
         
@@ -145,20 +145,20 @@ def test_section_limit_exceeded():
         
         # Get current section total
         summary = request_manager.get_pl_summary("TEST-001")
-        section_a_used = summary['sections']['A']['approved']
-        section_a_limit = summary['sections']['A']['limit']
+        section_used = summary['sections']['EMR']['approved']
+        section_limit = summary['sections']['EMR']['limit']
         
-        print(f"   Current Section A usage: {section_a_used}/{section_a_limit}")
+        print(f"   Current Section EMR usage: {section_used}/{section_limit}")
         
         # Try to exceed section limit
-        remaining = section_a_limit - section_a_used
+        remaining = section_limit - section_used
         excessive_request = remaining + 50  # Request more than remaining
         
         print(f"   Attempting to request: {excessive_request} (exceeds by {excessive_request - remaining})")
         
         request_manager.create_request(
             pl_no="TEST-001",
-            requested_by="A",
+            requested_by="EMR",
             requested_count=excessive_request
         )
         
@@ -182,19 +182,19 @@ def test_yearly_limit_exceeded():
         request_manager = RequestManager()
         
         # Fill up other sections to approach yearly limit
-        print("   Filling up sections B, C, D to approach yearly limit...")
+        print("   Filling up sections EWFPS, EMS, EGS to approach yearly limit...")
         
-        # Section B: 200
-        request_manager.create_request("TEST-001", "B", 200)
-        print(f"   ✓ Section B: 200")
+        # Section EWFPS: 200
+        request_manager.create_request("TEST-001", "EWFPS", 200)
+        print(f"   ✓ Section EWFPS: 200")
         
-        # Section C: 200
-        request_manager.create_request("TEST-001", "C", 200)
-        print(f"   ✓ Section C: 200")
+        # Section EMS: 200
+        request_manager.create_request("TEST-001", "EMS", 200)
+        print(f"   ✓ Section EMS: 200")
         
-        # Section D: 200
-        request_manager.create_request("TEST-001", "D", 200)
-        print(f"   ✓ Section D: 200")
+        # Section EGS: 200
+        request_manager.create_request("TEST-001", "EGS", 200)
+        print(f"   ✓ Section EGS: 200")
         
         # Get current total
         summary = request_manager.get_pl_summary("TEST-001")
@@ -211,7 +211,7 @@ def test_yearly_limit_exceeded():
         
         request_manager.create_request(
             pl_no="TEST-001",
-            requested_by="D",
+            requested_by="EGS",
             requested_count=excessive_request
         )
         
@@ -240,7 +240,7 @@ def test_get_summary():
         print(f"   Yearly: {summary['yearly']['approved']}/{summary['yearly']['limit']} "
               f"({summary['yearly']['percentage_used']}%)")
         print(f"   Sections:")
-        for section in ['A', 'B', 'C', 'D']:
+        for section in ['EMR', 'EWFPS', 'EMS', 'EGS']:
             sect = summary['sections'][section]
             print(f"     {section}: {sect['approved']}/{sect['limit']} "
                   f"({sect['percentage_used']}% used, {sect['remaining']} remaining)")
@@ -290,6 +290,70 @@ def test_update_delivery():
         return False
 
 
+
+
+def test_delivery_enforcement():
+    """Test 8: Delivery Enforcement (Parallel Requests)"""
+    print_section("TEST 8: Delivery Enforcement (Parallel Requests)")
+    
+    unique_pl = "TEST-002"
+    
+    try:
+        request_manager = RequestManager()
+        pl_manager = PLNumberManager()
+        
+        # Setup: Create fresh PL
+        pl_manager.add_pl_number(
+            unique_pl, 
+            "Test Product 2", 
+            1000, 
+            1000, 
+            {'EMR': 250, 'EWFPS': 250, 'EMS': 250, 'EGS': 100}
+        )
+        print(f"   Created {unique_pl} with EGS limit 100")
+        
+        # 1. Create Request A (60) - Should Pass
+        req_a = request_manager.create_request(unique_pl, "EGS", 60)
+        print("   ✓ Request A (60) created (Pending)")
+        
+        # 2. Create Request B (60) - Should FAIL (Because A reserves 60, total 120 > 100)
+        # 0 delivered + 60 (A) + 60 (B) = 120 > 100
+        print("   Attempting Request B (60)...")
+        try:
+            req_b = request_manager.create_request(unique_pl, "EGS", 60)
+            print("❌ FAILED: System allowed Request B exceeding limit (Pending not counting)")
+            
+            # Cleanup on failure
+            get_database().get_products_collection().delete_one({'pl_no': unique_pl})
+            return False
+            
+        except ValidationError as e:
+             print(f"   ✅ SUCCESS: Request B blocked correctly (Pending counts)")
+             print(f"   Error: {str(e)}")
+        
+        # 3. Deliver A (60) - Should Pass
+        request_manager.approve_request(str(req_a['_id']), "TEST_ADMIN")
+        request_manager.update_delivery(str(req_a['_id']), 60)
+        print("   ✓ Delivered Request A (60)")
+        
+        # Cleanup
+        get_database().get_products_collection().delete_one({'pl_no': unique_pl})
+        get_database().get_requests_collection().delete_many({'pl_no': unique_pl})
+        
+        return True
+            
+    except Exception as e:
+        print(f"❌ FAILED: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        try:
+            get_database().get_products_collection().delete_one({'pl_no': unique_pl})
+            get_database().get_requests_collection().delete_many({'pl_no': unique_pl})
+        except:
+            pass
+        return False
+
+
 def test_invalid_section():
     """Test 9: Invalid Section (Should Fail)"""
     print_section("TEST 9: Invalid Section (Should Fail)")
@@ -326,7 +390,7 @@ def test_negative_quantity():
         # Try negative quantity
         request_manager.create_request(
             pl_no="TEST-001",
-            requested_by="A",
+            requested_by="EMR",
             requested_count=-10
         )
         
@@ -384,7 +448,9 @@ def run_all_tests():
         ("Section Limit Exceeded", test_section_limit_exceeded),
         ("Yearly Limit Exceeded", test_yearly_limit_exceeded),
         ("Get Summary", test_get_summary),
-        ("Update Delivery", test_update_delivery),
+        # ("Get Summary", test_get_summary),
+        # ("Update Delivery", test_update_delivery),
+        ("Delivery Enforcement", test_delivery_enforcement),
         ("Invalid Section", test_invalid_section),
         ("Negative Quantity", test_negative_quantity),
     ]

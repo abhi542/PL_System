@@ -19,6 +19,7 @@ from business_logic import (
     utc_to_ist
 )
 from database import get_database
+from data_import import import_pl_data_from_excel
 
 
 # Page configuration
@@ -206,19 +207,24 @@ def page_add_pl_number():
         
         # Section limits
         st.markdown("### Section-wise Limits")
-        col_a, col_b, col_c, col_d = st.columns(4)
         
-        with col_a:
-            limit_a = st.number_input("Section A *", min_value=0, value=250, step=1)
-        with col_b:
-            limit_b = st.number_input("Section B *", min_value=0, value=250, step=1)
-        with col_c:
-            limit_c = st.number_input("Section C *", min_value=0, value=250, step=1)
-        with col_d:
-            limit_d = st.number_input("Section D *", min_value=0, value=250, step=1)
+        # Dynamic columns for sections
+        sections = PLNumberManager.VALID_SECTIONS
+        cols = st.columns(len(sections))
+        section_inputs = {}
+        
+        for i, section in enumerate(sections):
+            with cols[i]:
+                section_inputs[section] = st.number_input(
+                    f"Section {section} *", 
+                    min_value=0, 
+                    value=0, 
+                    step=1,
+                    key=f"limit_{section}"
+                )
         
         # Show sum
-        total_section_limits = limit_a + limit_b + limit_c + limit_d
+        total_section_limits = sum(section_inputs.values())
         if total_section_limits > global_limit:
             st.warning(f"⚠️ Sum of section limits ({total_section_limits}) exceeds Global Limit ({global_limit})")
         else:
@@ -228,12 +234,7 @@ def page_add_pl_number():
         
         if submitted:
             try:
-                section_limits = {
-                    'A': limit_a,
-                    'B': limit_b,
-                    'C': limit_c,
-                    'D': limit_d
-                }
+                section_limits = section_inputs
                 
                 product = st.session_state.pl_manager.add_pl_number(
                     pl_no=pl_no,
@@ -295,8 +296,9 @@ def page_add_request():
                 st.markdown(f"**EAR:** {summary['ear']} | **Global Limit:** {summary['global_limit']}")
                 
                 # Section status
-                cols = st.columns(4)
-                for idx, section in enumerate(['A', 'B', 'C', 'D']):
+                sections = PLNumberManager.VALID_SECTIONS
+                cols = st.columns(len(sections))
+                for idx, section in enumerate(sections):
                     with cols[idx]:
                         sect_data = summary['sections'][section]
                         st.metric(
@@ -320,7 +322,7 @@ def page_add_request():
             # Section selection inside form
             requested_by = st.selectbox(
                 "Requesting Section *",
-                options=['A', 'B', 'C', 'D'],
+                options=PLNumberManager.VALID_SECTIONS,
                 help="Your section"
             )
         
@@ -393,14 +395,22 @@ def page_view_pl_summary():
             return
         
         # Selection
-        pl_options = {f"{p['pl_no']} - {p['product_name']}": p['pl_no'] for p in all_products}
-        selected_pl = st.selectbox("Select PL Number", options=list(pl_options.keys()))
+        col_sel1, col_sel2 = st.columns([2, 1])
+        with col_sel1:
+            pl_options = {f"{p['pl_no']} - {p['product_name']}": p['pl_no'] for p in all_products}
+            selected_pl = st.selectbox("Select PL Number", options=list(pl_options.keys()))
+            
+        with col_sel2:
+            as_of_date_val = st.date_input("View as of Date", value=datetime.now())
         
         if selected_pl:
             pl_no = pl_options[selected_pl]
             
+            # Create datetime for end of that day to include all transactions of that day
+            as_of_dt = make_ist_datetime(datetime.combine(as_of_date_val, datetime.max.time()))
+            
             # Get summary
-            summary = st.session_state.request_manager.get_pl_summary(pl_no)
+            summary = st.session_state.request_manager.get_pl_summary(pl_no, as_of_date=as_of_dt)
             
             # Product info
             st.markdown(f"## {summary['pl_no']} - {summary['product_name']}")
@@ -428,11 +438,12 @@ def page_view_pl_summary():
             st.markdown("### Section-wise Breakdown")
             
             section_data = []
-            for section in ['A', 'B', 'C', 'D']:
+            for section in PLNumberManager.VALID_SECTIONS:
                 sect = summary['sections'][section]
                 section_data.append({
                     'Section': section,
                     'Limit': sect['limit'],
+                    'Requested': sect['requested'],
                     'Approved': sect['approved'],
                     'Delivered': sect['delivered'],
                     'Remaining': sect['remaining'],
@@ -450,8 +461,9 @@ def page_view_pl_summary():
             
             # Simple status display
             st.markdown("### Section Status")
-            status_cols = st.columns(4)
-            for i, section in enumerate(['A', 'B', 'C', 'D']):
+            sections = PLNumberManager.VALID_SECTIONS
+            status_cols = st.columns(len(sections))
+            for i, section in enumerate(sections):
                 sect = summary['sections'][section]
                 with status_cols[i]:
                     st.metric(
@@ -479,7 +491,7 @@ def page_view_requests():
             selected_filter = st.selectbox("Filter by PL Number", options=pl_options)
         
         with col2:
-            section_filter = st.selectbox("Filter by Section", options=["All", "A", "B", "C", "D"])
+            section_filter = st.selectbox("Filter by Section", options=["All"] + PLNumberManager.VALID_SECTIONS)
         
         with col3:
             status_filter = st.selectbox("Filter by Status", options=["All", "pending", "delivered"])
@@ -515,7 +527,7 @@ def page_view_requests():
                 'Section': req['requested_by'],
                 'Emp ID': req.get('requested_by_emp_id', '-'),
                 'Requested': req['requested_count'],
-                'Request Date': utc_to_ist(req['request_date']).strftime('%Y-%m-%d'),
+                'Request Date': utc_to_ist(req['request_date']).strftime('%Y-%m-%d') if req.get('request_date') else '-',
                 'Approved By': req.get('approved_by', '-'),
                 'Delivered': str(req.get('delivered_count', 0)) if req.get('delivered_count') else '-',
                 'Delivery Date': utc_to_ist(req['delivered_date']).strftime('%Y-%m-%d') if req.get('delivered_date') else '-',
@@ -560,7 +572,7 @@ def page_approve_requests():
                         st.markdown(f"**Requested:** {req['requested_count']}")
                     
                     with col3:
-                        st.markdown(f"**Request Date:** {utc_to_ist(req['request_date']).strftime('%Y-%m-%d')}")
+                        st.markdown(f"**Request Date:** {utc_to_ist(req['request_date']).strftime('%Y-%m-%d') if req.get('request_date') else '-'}")
                         st.markdown("**Status:** PENDING")
                     
                     with col4:
@@ -654,7 +666,7 @@ def page_approve_requests():
                         st.markdown(f"**Requested:** {req['requested_count']}")
                     
                     with col3:
-                        st.markdown(f"**Request Date:** {utc_to_ist(req['request_date']).strftime('%Y-%m-%d')}")
+                        st.markdown(f"**Request Date:** {utc_to_ist(req['request_date']).strftime('%Y-%m-%d') if req.get('request_date') else '-'}")
                         st.markdown(f"**Approved By:** {req.get('approved_by', '-')}")
                         if req.get('approved_at'):
                             st.markdown(f"**Approved Date:** {utc_to_ist(req['approved_at']).strftime('%Y-%m-%d')}")
@@ -689,6 +701,119 @@ def page_approve_requests():
         else:
             st.info("ℹ️ No approved requests waiting for delivery.")
         
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+
+
+
+def page_admin_import():
+    """Page: Import Data from Excel (Admin Only)"""
+    st.title("📥 Import PL Data")
+    st.markdown("---")
+    
+    st.info("""
+    **Instructions:**
+    1. Ensure Excel file follows the format: `PL`, `DESCRIPTION`, `WSC` (EAR), `EMR`, `EWFPS`, `EMS`, `EGS`.
+    2. WSC will be used as EAR.
+    3. Global Limit will be set to min(1000, EAR).
+    4. Section limits will be initialized to 0.
+    """)
+    
+    tab1, tab2 = st.tabs(["📂 Upload File", "📝 Manual Path"])
+    
+    file_to_import = None
+    
+    with tab1:
+        uploaded_file = st.file_uploader("Upload Excel File", type=['xlsx', 'xls'])
+        if uploaded_file:
+            file_to_import = uploaded_file
+            
+    with tab2:
+        default_path = r"d:\Abhinav\Coding\test_pl_no\excel_data\RWF Stock Summary.xlsx"
+        manual_path = st.text_input("Excel File Path", value=default_path)
+        if manual_path:
+            file_to_import = manual_path
+    
+    if st.button("🚀 Start Import", type="primary"):
+        if not file_to_import:
+            st.error("Please upload a file or provide a valid path")
+        else:
+            with st.spinner("Importing data... This may take a moment."):
+                # If uploaded_file (BytesIO), passed directly because data_import handles it.
+                # If manual_path (str), passed directly.
+                success = import_pl_data_from_excel(file_to_import)
+                
+            if success:
+                st.success("✅ Data Imported Successfully!")
+                st.balloons()
+            else:
+                st.error("❌ Import Failed. Check console logs for details.")
+
+
+def page_admin_edit_limits():
+    """Page: Edit PL Limits (Admin Only)"""
+    st.title("⚙️ Edit PL Limits")
+    st.markdown("---")
+    
+    try:
+        all_products = st.session_state.pl_manager.get_all_pl_numbers()
+        if not all_products:
+            st.info("No PL Numbers found.")
+            return
+            
+        pl_options = {f"{p['pl_no']} - {p['product_name']}": p['pl_no'] for p in all_products}
+        selected_pl = st.selectbox("Select PL Number to Edit", options=list(pl_options.keys()))
+        
+        if selected_pl:
+            pl_no = pl_options[selected_pl]
+            product = st.session_state.pl_manager.get_pl_number(pl_no)
+            
+            st.markdown(f"### Editing: {pl_no}")
+            
+            with st.form("edit_limits_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_ear = st.number_input("EAR", value=product['ear'], min_value=1)
+                with col2:
+                    new_global = st.number_input("Global Limit", value=product['global_limit'], min_value=1)
+                
+                st.markdown("#### Section Limits")
+                sections = PLNumberManager.VALID_SECTIONS
+                cols = st.columns(len(sections))
+                new_section_limits = {}
+                
+                for i, section in enumerate(sections):
+                    with cols[i]:
+                        current_val = product['section_limits'].get(section, 0)
+                        new_section_limits[section] = st.number_input(
+                            f"Section {section}", 
+                            value=current_val, 
+                            min_value=0,
+                            key=f"edit_limit_{section}"
+                        )
+                
+                # Validation info
+                total_sections = sum(new_section_limits.values())
+                if total_sections > new_global:
+                    st.warning(f"⚠️ Sum of sections ({total_sections}) > Global Limit ({new_global})")
+                else:
+                    st.success(f"✅ Sum of sections: {total_sections} / {new_global}")
+                
+                if st.form_submit_button("💾 Save Changes", type="primary"):
+                    try:
+                        st.session_state.pl_manager.update_pl_number(
+                            pl_no=pl_no,
+                            ear=new_ear,
+                            global_limit=new_global,
+                            section_limits=new_section_limits
+                        )
+                        st.success("✅ Limits updated successfully!")
+                        st.rerun()
+                    except ValidationError as e:
+                        st.error(f"Validation Error: {str(e)}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+                        
     except Exception as e:
         st.error(f"Error: {str(e)}")
 
@@ -794,6 +919,8 @@ def main():
     
     if st.session_state.user_type == "admin":
         nav_options.append("✅ Approve Requests")
+        nav_options.append("📥 Import Data")
+        nav_options.append("⚙️ Edit Limits")
         nav_options.append("👥 Manage Users")
     
     # Navigation
@@ -831,6 +958,10 @@ def main():
         page_view_requests()
     elif page == "✅ Approve Requests" and st.session_state.user_type == "admin":
         page_approve_requests()
+    elif page == "📥 Import Data" and st.session_state.user_type == "admin":
+        page_admin_import()
+    elif page == "⚙️ Edit Limits" and st.session_state.user_type == "admin":
+        page_admin_edit_limits()
     elif page == "👥 Manage Users" and st.session_state.user_type == "admin":
         page_manage_users()
 

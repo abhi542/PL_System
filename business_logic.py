@@ -44,7 +44,7 @@ class PLNumberManager:
     Manages PL Numbers (Products) with strict limit enforcement
     """
     
-    VALID_SECTIONS = ['A', 'B', 'C', 'D']
+    VALID_SECTIONS = ['EMR', 'EWFPS', 'EMS', 'EGS']
     
     def __init__(self):
         self.db = get_database()
@@ -123,10 +123,10 @@ class PLNumberManager:
             'ear': ear,
             'global_limit': global_limit,
             'section_limits': {
-                'A': section_limits['A'],
-                'B': section_limits['B'],
-                'C': section_limits['C'],
-                'D': section_limits['D']
+                'EMR': section_limits['EMR'],
+                'EWFPS': section_limits['EWFPS'],
+                'EMS': section_limits['EMS'],
+                'EGS': section_limits['EGS']
             },
             'created_at': get_ist_time()
         }
@@ -203,31 +203,27 @@ class RequestManager:
     NO WARNINGS, NO OVERRIDES, NO PARTIAL APPROVALS
     """
     
-    VALID_SECTIONS = ['A', 'B', 'C', 'D']
+    VALID_SECTIONS = ['EMR', 'EWFPS', 'EMS', 'EGS']
     
     def __init__(self):
         self.db = get_database()
         self.requests_collection = self.db.get_requests_collection()
         self.pl_manager = PLNumberManager()
     
-    def _get_section_total_requested(self, pl_no: str, section: str) -> int:
+    def _get_section_total_requested(self, pl_no: str, section: str, as_of_date: datetime = None) -> int:
         """
         Calculate total requested quantity for a specific section
-        
-        Args:
-            pl_no: PL Number
-            section: Section (A/B/C/D)
-        
-        Returns:
-            Total requested quantity for the section
         """
+        match_stage = {
+            'pl_no': pl_no.strip().upper(),
+            'requested_by': section
+        }
+        
+        if as_of_date:
+            match_stage['request_date'] = {'$lte': as_of_date}
+            
         pipeline = [
-            {
-                '$match': {
-                    'pl_no': pl_no.strip().upper(),
-                    'requested_by': section
-                }
-            },
+            { '$match': match_stage },
             {
                 '$group': {
                     '_id': None,
@@ -239,25 +235,21 @@ class RequestManager:
         result = list(self.requests_collection.aggregate(pipeline))
         return result[0]['total'] if result else 0
     
-    def _get_section_total_approved(self, pl_no: str, section: str) -> int:
+    def _get_section_total_approved(self, pl_no: str, section: str, as_of_date: datetime = None) -> int:
         """
         Calculate total approved quantity for a specific section
-        
-        Args:
-            pl_no: PL Number
-            section: Section (A/B/C/D)
-        
-        Returns:
-            Total approved quantity for the section
         """
+        match_stage = {
+            'pl_no': pl_no.strip().upper(),
+            'requested_by': section,
+            'status': {'$in': ['approved', 'delivered']}
+        }
+        
+        if as_of_date:
+            match_stage['approved_at'] = {'$lte': as_of_date}
+            
         pipeline = [
-            {
-                '$match': {
-                    'pl_no': pl_no.strip().upper(),
-                    'requested_by': section,
-                    'status': {'$in': ['approved', 'delivered']}
-                }
-            },
+            { '$match': match_stage },
             {
                 '$group': {
                     '_id': None,
@@ -269,25 +261,21 @@ class RequestManager:
         result = list(self.requests_collection.aggregate(pipeline))
         return result[0]['total'] if result else 0
     
-    def _get_section_total_delivered(self, pl_no: str, section: str) -> int:
+    def _get_section_total_delivered(self, pl_no: str, section: str, as_of_date: datetime = None) -> int:
         """
         Calculate total delivered quantity for a specific section
-        
-        Args:
-            pl_no: PL Number
-            section: Section (A/B/C/D)
-        
-        Returns:
-            Total delivered quantity for the section
         """
+        match_stage = {
+            'pl_no': pl_no.strip().upper(),
+            'requested_by': section,
+            'status': 'delivered'
+        }
+        
+        if as_of_date:
+            match_stage['delivered_date'] = {'$lte': as_of_date}
+            
         pipeline = [
-            {
-                '$match': {
-                    'pl_no': pl_no.strip().upper(),
-                    'requested_by': section,
-                    'status': 'delivered'
-                }
-            },
+            { '$match': match_stage },
             {
                 '$group': {
                     '_id': None,
@@ -299,22 +287,19 @@ class RequestManager:
         result = list(self.requests_collection.aggregate(pipeline))
         return result[0]['total'] if result else 0
     
-    def _get_total_requested_all_sections(self, pl_no: str) -> int:
+    def _get_total_requested_all_sections(self, pl_no: str, as_of_date: datetime = None) -> int:
         """
         Calculate total requested quantity across ALL sections
-        
-        Args:
-            pl_no: PL Number
-        
-        Returns:
-            Total requested quantity across all sections
         """
+        match_stage = {
+            'pl_no': pl_no.strip().upper()
+        }
+        
+        if as_of_date:
+            match_stage['request_date'] = {'$lte': as_of_date}
+            
         pipeline = [
-            {
-                '$match': {
-                    'pl_no': pl_no.strip().upper()
-                }
-            },
+            { '$match': match_stage },
             {
                 '$group': {
                     '_id': None,
@@ -326,23 +311,20 @@ class RequestManager:
         result = list(self.requests_collection.aggregate(pipeline))
         return result[0]['total'] if result else 0
     
-    def _get_total_approved_all_sections(self, pl_no: str) -> int:
+    def _get_total_approved_all_sections(self, pl_no: str, as_of_date: datetime = None) -> int:
         """
         Calculate total approved quantity across ALL sections
-        
-        Args:
-            pl_no: PL Number
-        
-        Returns:
-            Total approved quantity across all sections
         """
+        match_stage = {
+            'pl_no': pl_no.strip().upper(),
+            'status': {'$in': ['approved', 'delivered']}
+        }
+        
+        if as_of_date:
+            match_stage['approved_at'] = {'$lte': as_of_date}
+            
         pipeline = [
-            {
-                '$match': {
-                    'pl_no': pl_no.strip().upper(),
-                    'status': {'$in': ['approved', 'delivered']}
-                }
-            },
+            { '$match': match_stage },
             {
                 '$group': {
                     '_id': None,
@@ -354,23 +336,20 @@ class RequestManager:
         result = list(self.requests_collection.aggregate(pipeline))
         return result[0]['total'] if result else 0
     
-    def _get_total_delivered_all_sections(self, pl_no: str) -> int:
+    def _get_total_delivered_all_sections(self, pl_no: str, as_of_date: datetime = None) -> int:
         """
         Calculate total delivered quantity across ALL sections
-        
-        Args:
-            pl_no: PL Number
-        
-        Returns:
-            Total delivered quantity across all sections
         """
+        match_stage = {
+            'pl_no': pl_no.strip().upper(),
+            'status': 'delivered'
+        }
+        
+        if as_of_date:
+            match_stage['delivered_date'] = {'$lte': as_of_date}
+            
         pipeline = [
-            {
-                '$match': {
-                    'pl_no': pl_no.strip().upper(),
-                    'status': 'delivered'
-                }
-            },
+            { '$match': match_stage },
             {
                 '$group': {
                     '_id': None,
@@ -424,9 +403,11 @@ class RequestManager:
         if requested_count <= 0:
             return False, "Requested count must be greater than 0", validation_details
         
-        # Get current totals
+        # Get current totals (PENDING + APPROVED + DELIVERED)
+        # NOTE: Validation includes PENDING requests to prevent over-requesting
         section_total = self._get_section_total_requested(pl_no, requested_by)
         all_sections_total = self._get_total_requested_all_sections(pl_no)
+
         
         validation_details['section_total'] = section_total
         validation_details['all_sections_total'] = all_sections_total
@@ -442,7 +423,7 @@ class RequestManager:
             error_msg = (
                 f"❌ SECTION LIMIT EXCEEDED\n"
                 f"Section {requested_by} limit: {section_limit}\n"
-                f"Already requested: {section_total}\n"
+                f"Already requested (incl. pending): {section_total}\n"
                 f"New request: {requested_count}\n"
                 f"Would total: {new_section_total}\n"
                 f"❌ REQUEST BLOCKED - Exceeds limit by {new_section_total - section_limit}"
@@ -553,8 +534,8 @@ class RequestManager:
         """
         Update delivery information for a request
         
-        NOTE: Delivered quantity does NOT affect limit calculations
-        Limits are based on REQUESTED quantities only
+        NOTE: Delivered quantity DOES affect limit calculations
+        Limits are strictly enforced at delivery time
         """
         from bson.objectid import ObjectId
         
@@ -572,6 +553,33 @@ class RequestManager:
         # Determine status: only allow full delivery
         if delivered_count != request['requested_count']:
             raise ValidationError(f"Partial delivery not allowed. Must deliver full requested quantity ({request['requested_count']})")
+        
+        # ---------------------------------------------------
+        # NEW: Validate limits before delivery
+        # ---------------------------------------------------
+        pl_no = request['pl_no']
+        requested_by = request['requested_by']
+        product = self.pl_manager.get_pl_number(pl_no)
+        
+        # 1. Section Limit Check
+        section_used = self._get_section_total_delivered(pl_no, requested_by)
+        section_limit = product['section_limits'][requested_by]
+        
+        if (section_used + delivered_count) > section_limit:
+             raise ValidationError(
+                f"Delivery blocked: Section {requested_by} limit exceeded. "
+                f"Limit: {section_limit}, Delivered: {section_used}, Adding: {delivered_count}"
+            )
+            
+        # 2. Yearly Limit Check
+        yearly_used = self._get_total_delivered_all_sections(pl_no)
+        yearly_limit = min(product['ear'], product['global_limit'])
+        
+        if (yearly_used + delivered_count) > yearly_limit:
+            raise ValidationError(
+                f"Delivery blocked: Yearly limit exceeded. "
+                f"Limit: {yearly_limit}, Delivered: {yearly_used}, Adding: {delivered_count}"
+            )
         
         # Full delivery - mark as delivered
         result = self.requests_collection.update_one(
@@ -631,10 +639,11 @@ class RequestManager:
         
         return result.modified_count > 0
     
-    def get_pl_summary(self, pl_no: str) -> Dict:
+    def get_pl_summary(self, pl_no: str, as_of_date: datetime = None) -> Dict:
         """
         Get comprehensive summary for a PL Number
         Shows limits vs usage for each section (approved and delivered)
+        Optionally filtered by as_of_date
         """
         product = self.pl_manager.get_pl_number(pl_no)
         if not product:
@@ -648,22 +657,26 @@ class RequestManager:
             'sections': {}
         }
         
-        # Calculate usage for each section (approved and delivered)
+        # Calculate usage for each section (requested, approved, and delivered)
+        total_requested = 0
         total_approved = 0
         total_delivered = 0
         for section in self.VALID_SECTIONS:
-            approved_total = self._get_section_total_approved(pl_no, section)
-            delivered_total = self._get_section_total_delivered(pl_no, section)
+            requested_total = self._get_section_total_requested(pl_no, section, as_of_date)
+            approved_total = self._get_section_total_approved(pl_no, section, as_of_date)
+            delivered_total = self._get_section_total_delivered(pl_no, section, as_of_date)
             section_limit = product['section_limits'][section]
             
             summary['sections'][section] = {
                 'limit': section_limit,
+                'requested': requested_total,
                 'approved': approved_total,
                 'delivered': delivered_total,
                 'remaining': section_limit - delivered_total,
                 'percentage_used': round((delivered_total / section_limit * 100) if section_limit > 0 else 0, 2)
             }
             
+            total_requested += requested_total
             total_approved += approved_total
             total_delivered += delivered_total
         
