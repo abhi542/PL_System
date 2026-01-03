@@ -44,7 +44,7 @@ class PLNumberManager:
     Manages PL Numbers (Products) with strict limit enforcement
     """
     
-    VALID_SECTIONS = ['EMR', 'EWFPS', 'EMS', 'EGS']
+    VALID_SECTIONS = ['EMS', 'EMR', 'EWFPS', 'EGS']
     
     def __init__(self):
         self.db = get_database()
