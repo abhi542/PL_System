@@ -66,10 +66,13 @@ def import_pl_data_from_excel(file_path):
                 
                 # Section Limits: Rule says initialize to 0
                 section_limits = {
+                    'EMS': 0,
                     'EMR': 0,
                     'EWFPS': 0,
-                    'EMS': 0,
-                    'EGS': 0
+                    'EGS': 0,
+                    'Shift EMS': 0,
+                    'Shift EMR': 0,
+                    'Shift EWFPS': 0
                 }
                 
                 # Upsert Logic: Check if exists, if so update updates, else add

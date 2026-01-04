@@ -44,7 +44,7 @@ class PLNumberManager:
     Manages PL Numbers (Products) with strict limit enforcement
     """
     
-    VALID_SECTIONS = ['EMS', 'EMR', 'EWFPS', 'EGS']
+    VALID_SECTIONS = ['EMS', 'EMR', 'EWFPS', 'EGS', 'Shift EMS', 'Shift EMR', 'Shift EWFPS']
     
     def __init__(self):
         self.db = get_database()
@@ -203,7 +203,7 @@ class RequestManager:
     NO WARNINGS, NO OVERRIDES, NO PARTIAL APPROVALS
     """
     
-    VALID_SECTIONS = ['EMR', 'EWFPS', 'EMS', 'EGS']
+    VALID_SECTIONS = ['EMS', 'EMR', 'EWFPS', 'EGS', 'Shift EMS', 'Shift EMR', 'Shift EWFPS']
     
     def __init__(self):
         self.db = get_database()
