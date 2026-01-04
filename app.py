@@ -207,7 +207,7 @@ def page_add_pl_number():
                 min_value=1,
                 value=1000,
                 step=1,
-                help="Must be ≤ EAR"
+                help="Overall limit for this PL No."
             )
             
             st.markdown("### Section Limits")

@@ -89,8 +89,9 @@ class PLNumberManager:
         if global_limit <= 0:
             raise ValidationError("Global limit must be greater than 0")
         
-        if global_limit > ear:
-            raise ValidationError(f"Global limit ({global_limit}) cannot exceed EAR ({ear})")
+        # REMOVED: Global limit > EAR check as per user request
+        # if global_limit > ear:
+        #     raise ValidationError(f"Global limit ({global_limit}) cannot exceed EAR ({ear})")
         
         # VALIDATION: All 4 sections must be present
         if not all(section in section_limits for section in self.VALID_SECTIONS):
@@ -169,8 +170,11 @@ class PLNumberManager:
         if ear <= 0:
             raise ValidationError("EAR must be greater than 0")
         
-        if global_limit <= 0 or global_limit > ear:
-            raise ValidationError(f"Global limit must be between 1 and {ear}")
+        if global_limit <= 0:
+            raise ValidationError("Global limit must be greater than 0")
+            
+        # REMOVED: Global limit > EAR check as per user request
+        # if global_limit > ear: ...
         
         for section in self.VALID_SECTIONS:
             if section not in section_limits or section_limits[section] < 0:
