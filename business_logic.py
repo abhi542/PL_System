@@ -123,12 +123,9 @@ class PLNumberManager:
             'product_name': product_name.strip(),
             'ear': ear,
             'global_limit': global_limit,
-            'section_limits': {
-                'EMR': section_limits['EMR'],
-                'EWFPS': section_limits['EWFPS'],
-                'EMS': section_limits['EMS'],
-                'EGS': section_limits['EGS']
-            },
+            'ear': ear,
+            'global_limit': global_limit,
+            'section_limits': {section: section_limits[section] for section in self.VALID_SECTIONS},
             'created_at': get_ist_time()
         }
         
@@ -242,6 +239,8 @@ class RequestManager:
     def _get_section_total_approved(self, pl_no: str, section: str, as_of_date: datetime = None) -> int:
         """
         Calculate total approved quantity for a specific section
+        Includes items that are 'approved' OR 'delivered'
+        Handles backdated deliveries where delivered_date < approved_at
         """
         match_stage = {
             'pl_no': pl_no.strip().upper(),
@@ -250,7 +249,22 @@ class RequestManager:
         }
         
         if as_of_date:
-            match_stage['approved_at'] = {'$lte': as_of_date}
+            # Logic: 
+            # 1. If approved and approved_at <= date -> Include
+            # 2. If delivered and approved_at <= date -> Include
+            # 3. If delivered and delivered_date <= date -> Include (Implicitly approved)
+            # Simplification: If (approved_at <= date) OR (delivered_date <= date and status is delivered)
+            
+            # Since MongoDB query structure for mixed AND/OR can be complex in $match, 
+            # let's construct it carefully.
+            
+            match_stage['$or'] = [
+                {'approved_at': {'$lte': as_of_date}},
+                {
+                    'status': 'delivered',
+                    'delivered_date': {'$lte': as_of_date}
+                }
+            ]
             
         pipeline = [
             { '$match': match_stage },
@@ -715,7 +729,7 @@ class RequestManager:
             requested_total = self._get_section_total_requested(pl_no, section, as_of_date)
             approved_total = self._get_section_total_approved(pl_no, section, as_of_date)
             delivered_total = self._get_section_total_delivered(pl_no, section, as_of_date)
-            section_limit = product['section_limits'][section]
+            section_limit = product['section_limits'].get(section, 0)
             
             summary['sections'][section] = {
                 'limit': section_limit,
