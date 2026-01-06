@@ -963,14 +963,15 @@ def main():
     st.sidebar.markdown("---")
     
     # Navigation options based on user type
+    # Navigation options based on user type
     nav_options = [
-        "📦 Add PL Number",
         "📝 Add Request",
         "📊 View PL Summary",
         "📋 View Requests"
     ]
     
     if st.session_state.user_type == "admin":
+        nav_options.insert(0, "📦 Add PL Number")
         nav_options.append("✅ Approve Requests")
         nav_options.append("📥 Import Data")
         nav_options.append("⚙️ Edit Limits")
