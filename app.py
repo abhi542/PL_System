@@ -440,6 +440,10 @@ def page_view_pl_summary():
             st.progress(yearly['percentage_used'] / 100)
             st.caption(f"Yearly consumption: {yearly['percentage_used']}%")
             
+            # 50% Alert for EAR/Global Limit
+            if yearly['percentage_used'] >= 50:
+                st.warning(f"⚠️ {yearly['percentage_used']}% usage done! Please plan accordingly.")
+            
             st.markdown("---")
             
             # Section breakdown
@@ -479,6 +483,9 @@ def page_view_pl_summary():
                         f"{sect['delivered']}/{sect['limit']}", 
                         f"{sect['percentage_used']:.1f}% used"
                     )
+                    # 50% Alert for Section
+                    if sect['percentage_used'] >= 50:
+                        st.warning(f"⚠️ {sect['percentage_used']}% usage done!")
             
     except Exception as e:
         st.error(f"Error: {str(e)}")
